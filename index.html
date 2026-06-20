@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<title>lean-qr Babel ES5 Compatibility Fix</title>
+<style>
+  body { font-family: system-ui; }
+  svg { margin: 4px 0; }
+  p { margin: 0; }
+  .group { margin-bottom: 28px; }
+  .row { display: flex; gap: 24px; margin-bottom: 12px; }
+  .cell { min-width: 200px; }
+  .cell-label { font-size: 12px; text-align: center; margin-top: 2px; }
+</style>
+
+<div id="app"></div>
+
+<script src="qr-8355089-es5.js"></script>
+<script src="qr-00c68bb-es5.js"></script>
+<script type="module">
+import './qr-8355089-es6.js';
+import './qr-00c68bb-es6.js';
+import { toSvgSource } from './lean-qr-svg.mjs';
+
+const URLS = [
+  'hello',
+  'https://pay.example.com/test',
+  'weixin://wxpay/bizpayurl?pr=abc123',
+  'https://example.com/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+];
+
+function renderQr(qr, id, scale) {
+  document.getElementById(id).insertAdjacentHTML('beforeend',
+    toSvgSource(qr, { on: '#000', off: '#fff', pad: 0, scale }));
+}
+
+function compareQr(a, b) {
+  let diff = 0;
+  for (let y = 0; y < a.size; y++)
+    for (let x = 0; x < a.size; x++)
+      if (a.get(x, y) !== b.get(x, y)) diff++;
+  return { diff, total: a.size * a.size };
+}
+
+const REPO = 'https://github.com/journey-ad/lean-qr';
+
+const variants = [
+  {
+    label: `Before (<a href="${REPO}/commit/8355089" target="_blank">8355089</a>)`,
+    generateES5: window.gen_8355089_es5, corES5: window.cor_8355089_es5,
+    generateES6: window.gen_8355089_es6, corES6: window.cor_8355089_es6,
+  },
+  {
+    label: `After (<a href="${REPO}/commit/00c68bb" target="_blank">00c68bb</a>)`,
+    generateES5: window.gen_00c68bb_es5,   corES5: window.cor_00c68bb_es5,
+    generateES6: window.gen_00c68bb_es6,   corES6: window.cor_00c68bb_es6,
+  },
+];
+
+const app = document.getElementById('app');
+const pending = [];
+let counter = 0;
+
+for (const url of URLS) {
+  const rows = variants.map(v => {
+    const qrES6 = v.generateES6(url, { minCorrectionLevel: v.corES6.M });
+    const qrES5 = v.generateES5(url, { minCorrectionLevel: v.corES5.M });
+    const diff = compareQr(qrES6, qrES5);
+    return { label: v.label, qrES5, qrES6, diff };
+  });
+
+  const scale = Math.max(4, Math.min(8, Math.floor(300 / rows[0].qrES6.size)));
+
+  const cells = rows.map(row => {
+    const idES6 = 'q' + counter++;
+    const idES5 = 'q' + counter++;
+    pending.push([row.qrES6, idES6, scale], [row.qrES5, idES5, scale]);
+    return `<p><b>${row.label}</b></p>
+<p><b>Diff:</b> ${row.diff.diff}/${row.diff.total}</p>
+<div class="row">
+  <div class="cell"><span id="${idES6}"></span><div class="cell-label"><b>ES6</b></div></div>
+  <div class="cell"><span id="${idES5}"></span><div class="cell-label"><b>ES5</b></div></div>
+</div>`;
+  }).join('');
+
+  app.insertAdjacentHTML('beforeend',
+    `<div class="group"><p><b>Content:</b> ${url}</p>${cells}</div>`);
+}
+
+for (const [qr, id, scale] of pending) renderQr(qr, id, scale);
+</script>
